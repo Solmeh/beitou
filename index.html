@@ -1,136 +1,187 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-    <title>北投翻翻乐</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>北投探索配對</title>
     <style>
         .card {
             border: 1px solid #ccc;
             padding: 10px;
             margin: 5px;
             cursor: pointer;
-            width: 200px;
-            display: inline-block;
+            width: calc(50% - 20px);
+            box-sizing: border-box;
+            transition: transform 0.2s;
+        }
+        .card:active {
+            transform: scale(0.98);
         }
         .selected {
-            background-color: yellow;
+            background-color: #ffeb3b;
+            border-color: #ffc107;
         }
         .matched {
-            background-color: lightgreen;
+            background-color: #c8e6c9;
         }
         #timer {
-            font-size: 24px;
-            color: red;
+            font-size: 1.5em;
+            color: #d32f2f;
+            padding: 10px;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1;
+        }
+        @media (max-width: 600px) {
+            .card {
+                width: 100%;
+            }
         }
     </style>
 </head>
 <body>
-    <div id="timer">剩余时间：<span id="time">60:00</span></div>
+    <div id="timer">
+        ⏳ 剩余时间：<span id="time">--:--</span>
+        <div id="gameStatus"></div>
+    </div>
     <div id="cardContainer"></div>
-    <button onclick="submitAnswers()">提交答案</button>
+    <div class="submit-area">
+        <input type="text" id="teamName" placeholder="輸入小組名稱" required>
+        <button onclick="submitAnswers()" disabled>提交答案</button>
+    </div>
 
     <script>
-        // 替换为你的Google Apps Script部署URL
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzVuWmNfOJAEYHPCKeMkrhwiUPDg1fPssTz_3CbHQjgMDPVtfAMOwVVj13vsR1JKfU4/exec';
-
+        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5vmpkyiL6PTKlz5bda20SL15NV6jRdQ6ql342kGKxkQeKvLeHenJAhS2dz5e-sJz0/exec';
         let cards = [];
         let selectedCards = [];
         let matchedPairs = [];
-        let timeLeft = 3600;
+        let gameEnded = false;
 
+        // 初始化遊戲
         async function initGame() {
             try {
-                // 从Google Sheet获取卡片数据
+                // 獲取遊戲狀態
+                const status = await fetchGameStatus();
+                gameEnded = status.gameEnded;
+                
+                // 載入卡片資料
                 const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getCards`);
-                const data = await response.json();
-                cards = data;
+                cards = await response.json();
                 
-                // 打乱卡片顺序
-                cards.sort(() => Math.random() - 0.5);
-                
-                // 创建卡片元素
-                const container = document.getElementById('cardContainer');
-                cards.forEach(card => {
-                    const div = document.createElement('div');
-                    div.className = 'card';
-                    div.innerHTML = `
-                        <h3>${card.location}</h3>
-                        <p>物品：${card.item}</p>
-                        <p>觀察：${card.property}</p>
-                    `;
-                    div.dataset.id = card.id;
-                    div.dataset.answer = card.answer;
-                    div.onclick = () => selectCard(div, card);
-                    container.appendChild(div);
-                });
-
-                startTimer();
+                renderCards();
+                startStatusChecker();
+                updateSubmitButton();
             } catch (error) {
-                alert('无法加载卡片数据，请检查网络连接');
-                console.error(error);
+                console.error("遊戲初始化失敗：", error); 
+                alert('遊戲初始化失敗，請稍後重試');
             }
         }
 
-
-        function selectCard(element, card) {
-            if(element.classList.contains('matched')) return;
+        // 渲染卡片
+        function renderCards() {
+            const container = document.getElementById('cardContainer');
+            container.innerHTML = '';
             
+            cards.sort(() => Math.random() - 0.5).forEach(card => {
+                const div = document.createElement('div');
+                div.className = `card ${card.group}`;
+                div.innerHTML = `
+                    <h3>${card.location}</h3>
+                    <p>${card.item}</p>
+                    <div class="hint">${card.property}</div>
+                `;
+                div.onclick = () => !gameEnded && selectCard(div, card);
+                container.appendChild(div);
+            });
+        }
+
+        // 卡片選擇邏輯
+        function selectCard(element, card) {
             element.classList.toggle('selected');
             const index = selectedCards.findIndex(c => c.element === element);
             
             if(index === -1) {
-                selectedCards.push({element, card});
+                selectedCards.push({ element, card });
             } else {
                 selectedCards.splice(index, 1);
             }
 
             if(selectedCards.length === 2) {
-                checkMatch();
+                handlePair();
             }
         }
 
-        function checkMatch() {
+        // 處理配對
+        function handlePair() {
             const [card1, card2] = selectedCards;
+            const color = card1.card.group === card2.card.group ? 'green' : 'red';
             
-            if(card1.card.answer === card2.card.answer) {
-                card1.element.classList.add('matched');
-                card2.element.classList.add('matched');
-                matchedPairs.push({
-                    pair1: card1.card,
-                    pair2: card2.card
-                });
-            }
+            // 視覺反饋
+            card1.element.style.borderColor = color;
+            card2.element.style.borderColor = color;
             
+            setTimeout(() => {
+                card1.element.style.borderColor = '';
+                card2.element.style.borderColor = '';
+            }, 1000);
+
+            matchedPairs.push([card1.card.id, card2.card.id]);
             selectedCards.forEach(c => c.element.classList.remove('selected'));
             selectedCards = [];
         }
 
-        function startTimer() {
-            const timer = setInterval(() => {
-                timeLeft--;
-                const minutes = Math.floor(timeLeft / 60);
-                const seconds = timeLeft % 60;
-                document.getElementById('time').textContent = 
-                    `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        // 提交答案
+        async function submitAnswers() {
+            const team = document.getElementById('teamName').value;
+            if (!team) return alert('請輸入小組名稱');
 
-                if(timeLeft <= 0) {
-                    clearInterval(timer);
-                    document.querySelectorAll('.card').forEach(c => c.style.pointerEvents = 'none');
-                }
-            }, 1000);
+            try {
+                await fetch(GOOGLE_SCRIPT_URL, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        action: 'submit',
+                        team: team,
+                        matches: matchedPairs
+                    })
+                });
+                alert('答案已提交！請等待最終結果');
+            } catch (error) {
+                alert('提交失敗，請檢查網路連線');
+            }
         }
 
-        async function submitAnswers() {
-            const response = await fetch(GOOGLE_SCRIPT_URL, {
-                method: 'POST',
-                body: JSON.stringify({
-                    team: 'Team1', // 需替换实际小组名称
-                    matches: matchedPairs,
-                    score: matchedPairs.length
-                })
-            });
+        // 遊戲狀態檢查
+        async function fetchGameStatus() {
+            const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getStatus`);
+            return res.json();
+        }
+
+        // 定期檢查狀態
+        function startStatusChecker() {
+            setInterval(async () => {
+                const status = await fetchGameStatus();
+                gameEnded = status.gameEnded;
+                updateTimerDisplay(status.timeLeft);
+                updateSubmitButton();
+            }, 5000);
+        }
+
+        // 更新計時顯示
+        function updateTimerDisplay(seconds) {
+            const mins = Math.floor(seconds / 60);
+            const secs = seconds % 60;
+            document.getElementById('time').textContent = 
+                `${mins}:${secs.toString().padStart(2, '0')}`;
             
-            const result = await response.json();
-            alert(`提交成功！当前得分：${result.score}`);
+            document.getElementById('gameStatus').textContent = 
+                gameEnded ? '⛔ 遊戲已結束' : '🟢 進行中';
+        }
+
+        // 更新提交按鈕狀態
+        function updateSubmitButton() {
+            const btn = document.querySelector('button');
+            btn.disabled = !gameEnded;
+            btn.textContent = gameEnded ? '提交最終答案' : '等待遊戲結束';
         }
 
         window.onload = initGame;
