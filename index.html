@@ -1,190 +1,263 @@
+
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>北投探索配對</title>
+    <title>北投記憶配對遊戲</title>
     <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 10px;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #cardGrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+            max-width: 800px;
+            width: 100%;
+            justify-content: center;
+        }
+
         .card {
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin: 5px;
+            background: linear-gradient(145deg, #ffffff, #f8f9fa);
+            border-radius: 12px;
+            padding: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
             cursor: pointer;
-            width: calc(50% - 20px);
-            box-sizing: border-box;
-            transition: transform 0.2s;
+            height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            text-align: center;
+            border: 2px solid transparent;
+            overflow: hidden;
         }
-        .card:active {
-            transform: scale(0.98);
+
+        .card > div {
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            padding: 3px;
+            font-size: 13px;
         }
-        .selected {
-            background-color: #ffeb3b;
-            border-color: #ffc107;
+
+        .card.selected {
+            background: linear-gradient(145deg, #b3e5fc, #81d4fa);
+            transform: scale(0.96);
+            border-color: #2196F3;
+            box-shadow: 0 6px 16px rgba(33,150,243,0.2);
         }
-        .matched {
-            background-color: #c8e6c9;
+
+        .card.paired {
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.9);
         }
-        #timer {
-            font-size: 1.5em;
-            color: #d32f2f;
-            padding: 10px;
-            position: sticky;
-            top: 0;
+
+        button {
+            background: linear-gradient(145deg, #4CAF50, #45a049);
+            color: white;
+            border: none;
+            padding: 12px 28px;
+            border-radius: 30px;
+            margin: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            min-width: 160px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+
+        #pairedList {
+            width: 100%;
+            max-width: 800px;
+            margin: 25px 0;
+        }
+
+        .paired-group {
             background: white;
-            z-index: 1;
+            padding: 18px;
+            margin: 12px 0;
+            border-radius: 12px;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
         }
-        @media (max-width: 600px) {
-            .card {
-                width: 100%;
-            }
+
+        .card-info {
+            flex: 1;
+            padding: 8px;
+            min-width: 160px;
+        }
+
+        .correct { 
+            background: linear-gradient(145deg, #C8E6C9, #a5d6a7);
+            border: 2px solid #4CAF50;
+        }
+        .wrong { 
+            background: linear-gradient(145deg, #FFCDD2, #ef9a9a);
+            border: 2px solid #f44336;
+        }
+
+        #score {
+            font-size: 24px;
+            color: #2c3e50;
+            margin: 20px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div id="timer">
-        ⏳ 剩余时间：<span id="time">--:--</span>
-        <div id="gameStatus"></div>
+    <div id="cardGrid"></div>
+    <div id="controls">
+        <button id="pairBtn" disabled>🔗 配對選中的卡片</button>
+        <button id="submitBtn">✅ 提交答案</button>
     </div>
-    <div id="cardContainer"></div>
-    <div class="submit-area">
-        <input type="text" id="teamName" placeholder="輸入小組名稱" required>
-        <button onclick="submitAnswers()" disabled>提交答案</button>
-    </div>
+    <div id="pairedList"></div>
+    <div id="score"></div>
 
     <script>
-        const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5vmpkyiL6PTKlz5bda20SL15NV6jRdQ6ql342kGKxkQeKvLeHenJAhS2dz5e-sJz0/exec';
+        const gameData = [{"id":1,"地點":"溫泉博物館","物品":"彩色玻璃","性質":"最多的顏色","答案":"藍色"},{"id":2,"地點":"北投炸蛋蔥油餅","物品":"廣告牌背景","性質":"顏色","答案":"黃色"},{"id":3,"地點":"凱達格蘭文化館","物品":"《桌子旁的貓貓》畫作","性質":"貓的顏色","答案":"白灰色"},{"id":4,"地點":"北投公園","物品":"文學步道石","性質":"顏色","答案":"白色"},{"id":5,"地點":"北投圖書館門外","物品":"靠近階梯的石頭","性質":"顏色","答案":"黑灰色"},{"id":6,"地點":"凱達格蘭文化館","物品":"玩具捷運軌道","性質":"顏色","答案":"紅色"},{"id":7,"地點":"北投捷運站","物品":"樂器","性質":"顏色","答案":"黑色"},{"id":8,"地點":"北投圖書館門外","物品":"窗口玻璃雕刻","性質":"線條顏色","答案":"綠色"},{"id":9,"地點":"凱達格蘭文化館","物品":"樂器","性質":"顏色","答案":"褐色"},{"id":10,"地點":"北投溪木棧道","物品":"地面磚塊","性質":"顏色","答案":"土黃色"},{"id":11,"地點":"星川亭","物品":"獅子會徽章","性質":"顏色","答案":"藍色"},{"id":12,"地點":"溫泉博物館","物品":"天子字第一號字體","性質":"顏色","答案":"黃色"},{"id":13,"地點":"北投圖書館","物品":"檯燈","性質":"顏色","答案":"白灰色"},{"id":14,"地點":"溫泉博物館","物品":"女廁所外門簾","性質":"顏色","答案":"白色"},{"id":15,"地點":"北投車站","物品":"郵箱","性質":"顏色","答案":"黑灰色"},{"id":16,"地點":"北投本土味明泉紅茶","物品":"招牌文字","性質":"顏色","答案":"紅色"},{"id":17,"地點":"天狗庵史蹟公園","物品":"舊湯櫃址","性質":"文字顏色","答案":"黑色"},{"id":18,"地點":"溫泉博物館","物品":"古老信箱","性質":"顏色","答案":"綠色"},{"id":19,"地點":"北投圖書館","物品":"陽台椅子","性質":"顏色","答案":"褐色"},{"id":20,"地點":"凱達格蘭文化館外","物品":"帶有溫泉logo的雕刻","性質":"顏色","答案":"土黃色"}];
+
         let cards = [];
         let selectedCards = [];
-        let matchedPairs = [];
-        let gameEnded = false;
+        let pairedGroups = [];
+        let gameSubmitted = false;
 
-        // 初始化遊戲
-        async function initGame() {
-            try {
-                // 獲取遊戲狀態
-                const status = await fetchGameStatus();
-                gameEnded = status.gameEnded;
-                
-                // 載入卡片資料
-                const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getCards`);
-                cards = await response.json();
-                
-                renderCards();
-                startStatusChecker();
-                updateSubmitButton();
-            } catch (error) {
-                console.error("遊戲初始化失敗：", error); 
-                alert('遊戲初始化失敗，請稍後重試');
-            }
+        function init() {
+            cards = shuffle([...gameData]).map(c => ({ ...c, isPaired: false }));
+            renderCards();
+            
+            document.getElementById('pairBtn').addEventListener('click', pairCards);
+            document.getElementById('submitBtn').addEventListener('click', submitGame);
         }
 
-        // 渲染卡片
         function renderCards() {
-            const container = document.getElementById('cardContainer');
-            container.innerHTML = '';
+            const grid = document.getElementById('cardGrid');
+            grid.innerHTML = '';
             
-            cards.sort(() => Math.random() - 0.5).forEach(card => {
-                const div = document.createElement('div');
-                div.className = `card ${card.group}`;
-                div.innerHTML = `
-                    <h3>${card.location}</h3>
-                    <p>${card.item}</p>
-                    <div class="hint">${card.property}</div>
+            cards.forEach(card => {
+                const cardElement = document.createElement('div');
+                cardElement.className = `card${card.isPaired ? ' paired' : ''}${selectedCards.includes(card) ? ' selected' : ''}`;
+                cardElement.innerHTML = `
+                    <div><strong>${card.地點}</strong></div>
+                    <div>${card.物品}</div>
+                    <div>${card.性質}</div>
                 `;
-                div.onclick = () => !gameEnded && selectCard(div, card);
-                container.appendChild(div);
+                if(!gameSubmitted) {
+                    cardElement.addEventListener('click', () => toggleCard(card));
+                }
+                grid.appendChild(cardElement);
+            });
+
+            document.getElementById('pairBtn').disabled = selectedCards.length !== 2 || gameSubmitted;
+        }
+
+        function toggleCard(card) {
+            if (card.isPaired || gameSubmitted) return;
+            
+            const index = selectedCards.indexOf(card);
+            if (index > -1) {
+                selectedCards.splice(index, 1);
+            } else if (selectedCards.length < 2) {
+                selectedCards.push(card);
+            }
+            renderCards();
+        }
+
+        function pairCards() {
+            if (selectedCards.length !== 2 || gameSubmitted) return;
+            
+            const newPair = {
+                cards: [...selectedCards],
+                isCorrect: false,
+                tempId: Date.now()
+            };
+            
+            pairedGroups.push(newPair);
+            selectedCards.forEach(c => c.isPaired = true);
+            selectedCards = [];
+            
+            renderCards();
+            renderPairedList();
+        }
+
+        function renderPairedList() {
+            const list = document.getElementById('pairedList');
+            list.innerHTML = '<h3 style="color: #2c3e50; margin-bottom: 15px;">已配對組合</h3>';
+            
+            pairedGroups.forEach((group, index) => {
+                const div = document.createElement('div');
+                div.className = `paired-group ${gameSubmitted ? (group.isCorrect ? 'correct' : 'wrong') : ''}`;
+                div.innerHTML = `
+                    ${group.cards.map(card => `
+                        <div class="card-info">
+                            <div style="color: #3498db;">📍 ${card.地點}</div>
+                            <div>📦 ${card.物品}</div>
+                            <div>🔍 ${card.性質}</div>
+                            ${gameSubmitted ? `<div style="color: ${card.答案 === group.cards[0].答案 ? '#27ae60' : '#e74c3c'};">✅ 答案：${card.答案}</div>` : ''}
+                        </div>
+                    `).join('<div style="font-weight:bold; color:#9b59b6;">🔄</div>')}
+                    <button onclick="removePair(${index})" ${gameSubmitted ? 'disabled style="opacity:0.5;"' : ''}>❌ 取消</button>
+                `;
+                list.appendChild(div);
             });
         }
 
-        // 卡片選擇邏輯
-        function selectCard(element, card) {
-            element.classList.toggle('selected');
-            const index = selectedCards.findIndex(c => c.element === element);
+        function removePair(index) {
+            if (gameSubmitted) return;
             
-            if(index === -1) {
-                selectedCards.push({ element, card });
-            } else {
-                selectedCards.splice(index, 1);
+            const group = pairedGroups[index];
+            group.cards.forEach(c => c.isPaired = false);
+            pairedGroups.splice(index, 1);
+            
+            renderCards();
+            renderPairedList();
+        }
+
+        function submitGame() {
+            gameSubmitted = true;
+            let correct = 0;
+            
+            pairedGroups.forEach(group => {
+                group.isCorrect = group.cards[0].答案 === group.cards[1].答案;
+                if (group.isCorrect) correct++;
+            });
+
+            document.getElementById('score').innerHTML = `
+                <h3 style="color: ${correct === 10 ? '#27ae60' : '#e67e22'};">🎯 得分：${correct}/10</h3>
+                ${correct === 10 ? '🎉 恭喜全部答對！' : '💡 可以再檢查看看配對組合喔~'}
+            `;
+            
+            renderPairedList();
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('pairBtn').disabled = true;
+            renderCards();
+        }
+
+        function shuffle(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
             }
-
-            if(selectedCards.length === 2) {
-                handlePair();
-            }
+            return array;
         }
 
-        // 處理配對
-        function handlePair() {
-            const [card1, card2] = selectedCards;
-            const color = card1.card.group === card2.card.group ? 'green' : 'red';
-            
-            // 視覺反饋
-            card1.element.style.borderColor = color;
-            card2.element.style.borderColor = color;
-            
-            setTimeout(() => {
-                card1.element.style.borderColor = '';
-                card2.element.style.borderColor = '';
-            }, 1000);
-
-            matchedPairs.push([card1.card.id, card2.card.id]);
-            selectedCards.forEach(c => c.element.classList.remove('selected'));
-            selectedCards = [];
-        }
-
-        // 提交答案
-        async function submitAnswers() {
-            const team = document.getElementById('teamName').value;
-            if (!team) return alert('請輸入小組名稱');
-
-            try {
-                await fetch(GOOGLE_SCRIPT_URL, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        action: 'submit',
-                        team: team,
-                        matches: matchedPairs
-                    })
-                });
-                alert('答案已提交！請等待最終結果');
-            } catch (error) {
-                alert('提交失敗，請檢查網路連線');
-            }
-        }
-
-        // 遊戲狀態檢查
-        async function fetchGameStatus() {
-            const res = await fetch(`${GOOGLE_SCRIPT_URL}?action=getStatus`);
-            return res.json();
-        }
-
-        // 定期檢查狀態
-        function startStatusChecker() {
-            setInterval(async () => {
-                const status = await fetchGameStatus();
-                gameEnded = status.gameEnded;
-                updateTimerDisplay(status.timeLeft);
-                updateSubmitButton();
-            }, 5000);
-        }
-
-        // 更新計時顯示
-        function updateTimerDisplay(seconds) {
-            const mins = Math.floor(seconds / 60);
-            const secs = seconds % 60;
-            document.getElementById('time').textContent = 
-                `${mins}:${secs.toString().padStart(2, '0')}`;
-            
-            document.getElementById('gameStatus').textContent = 
-                gameEnded ? '⛔ 遊戲已結束' : '🟢 進行中';
-        }
-
-        // 更新提交按鈕狀態
-        function updateSubmitButton() {
-            const btn = document.querySelector('button');
-            btn.disabled = !gameEnded;
-            btn.textContent = gameEnded ? '提交最終答案' : '等待遊戲結束';
-        }
-
-        window.onload = initGame;
+        init();
     </script>
 </body>
 </html>
