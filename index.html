@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>北投記憶配對遊戲</title>
+    <title>北投對對樂</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -141,6 +141,14 @@
             text-align: center;
         }
 
+        .disabled-button {
+                background: linear-gradient(145deg, #cccccc, #b3b3b3) !important;
+                color: #666666 !important;
+                cursor: not-allowed;
+                transform: none !important;
+                box-shadow: none !important;
+            }
+
         /* 小螢幕樣式調整 */
         @media (max-width: 600px) {
             #cardGrid {
@@ -219,6 +227,9 @@
     <div id="score"></div>
 
     <script>
+        const targetDate = new Date(2025, 3, 22, 4, 0, 0); // 2025 年 3 月 22 日 4:00:00
+        const now = new Date();
+        const timeDifference = targetDate.getTime() - now.getTime();
         const gameData = [
             {"id":1,"地點":"溫泉博物館","物品":"彩色玻璃","性質":"最多的顏色","答案":"藍色"},
             {"id":2,"地點":"北投炸蛋蔥油餅","物品":"廣告牌背景","性質":"顏色","答案":"黃色"},
@@ -246,13 +257,53 @@
         let selectedCards =[];
         let pairedGroups =[];
         let gameSubmitted = false;
+        const STORAGE_KEY = 'beitou-memory-game';
 
         function init() {
-            cards = shuffle([...gameData]).map(c => ({ ...c, isPaired: false }));
+            const savedState = localStorage.getItem(STORAGE_KEY);
+            document.addEventListener('DOMContentLoaded', function() {
+                if (window.location.hash.toLowerCase() === '#clean') {
+                    localStorage.removeItem(STORAGE_KEY);
+                    window.location.hash = '';
+                }
+            });
+            if (savedState) {
+                // 解析保存的狀態
+                const { cards: savedCards, pairedGroups: savedPairs, gameSubmitted: savedSubmitted } = JSON.parse(savedState);
+                // 恢復 cards 陣列
+                cards = savedCards.map(savedCard => ({ ...savedCard }));
+                // 恢復 pairedGroups，並將其中的卡片替換為 cards 陣列中的對應物件
+                pairedGroups = savedPairs.map(savedGroup => ({
+                    ...savedGroup,
+                    cards: savedGroup.cards.map(savedCard => 
+                        cards.find(c => c.id === savedCard.id) // 根據 id 找到對應的卡片物件
+                    )
+                }));
+                gameSubmitted = savedSubmitted;
+
+                if (gameSubmitted) {
+                    submitGame()
+                }
+                
+            } else {
+                cards = shuffle([...gameData]).map(c => ({ ...c, isPaired: false }));
+                saveGameState()
+            }
             document.getElementById('pairBtn').addEventListener('click', pairCards);
             document.getElementById('submitBtn').addEventListener('click', submitGame);
-            renderCards(); // 首次渲染放在最後
+            render();
         }
+
+
+        function saveGameState() {
+            const state = {
+                cards: cards.map(card => ({ ...card })), // Save a copy to avoid direct modification
+                pairedGroups: pairedGroups.map(group => ({ ...group })),
+                gameSubmitted: gameSubmitted
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+        
 
         function renderCards() {
             const grid = document.getElementById('cardGrid');
@@ -310,7 +361,7 @@
             } else if (selectedCards.length < 2) {
                 selectedCards.push(card);
             }
-            renderCards(); // 每次點擊都重新渲染，以便更新行的顯示
+            render();
         }
 
         function pairCards() {
@@ -326,8 +377,8 @@
             selectedCards.forEach(c => c.isPaired = true);
             selectedCards =[];
 
-            renderCards(); // 配對後重新渲染
-            renderPairedList();
+            saveGameState();
+            render();
         }
 
         function removePair(index) {
@@ -337,8 +388,8 @@
             group.cards.forEach(c => c.isPaired = false);
             pairedGroups.splice(index, 1);
 
-            renderCards(); // 取消配對後重新渲染
-            renderPairedList();
+            saveGameState();
+            render();
         }
 
         function submitGame() {
@@ -350,15 +401,25 @@
                 if (group.isCorrect) correct++;
             });
 
+            const dataToSend = pairedGroups.map(group => {
+                return {
+                    cardIds: group.cards.map(card => card.id)
+                };
+                });
+
+            const jsonData = JSON.stringify(dataToSend);
+
+            console.log(jsonData);
+
             document.getElementById('score').innerHTML = `
                 <h3 style="color: ${correct === 10 ? '#27ae60' : '#e67e22'};">🎯 得分：${correct}/10</h3>
                 ${correct === 10 ? '🎉 恭喜全部答對！' : '💡 可以再檢查看看配對組合喔~'}
             `;
 
             renderPairedList();
-            document.getElementById('submitBtn').disabled = true;
             document.getElementById('pairBtn').disabled = true;
-            renderCards(); // 提交答案後重新渲染
+            saveGameState();
+            render();
         }
 
         function shuffle(array) {
@@ -368,7 +429,7 @@
             }
             return array;
         }
-
+        
         function renderPairedList() {
             const list = document.getElementById('pairedList');
             if (pairedGroups.length === 0) {
@@ -394,6 +455,34 @@
                 `;
                 list.appendChild(div);
             });
+        }
+
+        if (timeDifference > 0 && gameSubmitted == false) {
+            document.getElementById('submitBtn').disabled = true;
+            } else {
+                document.getElementById('submitBtn').disabled = false;
+        }
+
+        function renderButtons() {
+            if (document.getElementById('submitBtn').disabled==true) {
+                submitBtn.classList.add('disabled-button');
+                } else {
+                submitBtn.classList.remove('disabled-button');
+                }
+            if (document.getElementById('pairBtn').disabled==true) {
+                pairBtn.classList.add('disabled-button');
+                } else {
+                pairBtn.classList.remove('disabled-button');
+                }
+        }
+
+        function render(){
+            const scrollY = window.scrollY; // 儲存目前的垂直滾動位置
+            const scrollX = window.scrollX; // 儲存目前的水平滾動位置
+            renderCards();
+            renderButtons();
+            renderPairedList();
+            window.scrollTo(scrollX, scrollY); // 恢復滾動位置
         }
 
         init();
