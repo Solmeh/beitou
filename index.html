@@ -227,9 +227,25 @@
     <div id="score"></div>
 
     <script>
-        const targetDate = new Date(2025, 3, 22, 4, 0, 0); // 2025 年 3 月 22 日 4:00:00
+    const targetDate = new Date(2025, 2, 22, 15, 50, 0); // 目標日期
+
+    function submitBtnOpen() {
+        document.getElementById('submitBtn').disabled = gameSubmitted;
+        console.log("time end");
+        render();
+    }
+
+    function checkStartTime() {
         const now = new Date();
         const timeDifference = targetDate.getTime() - now.getTime();
+        if (timeDifference > 0) {
+            setTimeout(submitBtnOpen, timeDifference);
+        } else {
+            submitBtnOpen();
+        }
+    }
+
+        
         const gameData = [
             {"id":1,"地點":"溫泉博物館","物品":"彩色玻璃","性質":"最多的顏色","答案":"藍色"},
             {"id":2,"地點":"北投炸蛋蔥油餅","物品":"廣告牌背景","性質":"顏色","答案":"黃色"},
@@ -258,6 +274,7 @@
         let pairedGroups =[];
         let gameSubmitted = false;
         const STORAGE_KEY = 'beitou-memory-game';
+        document.getElementById('submitBtn').disabled = true;
 
         function init() {
             const savedState = localStorage.getItem(STORAGE_KEY);
@@ -457,12 +474,6 @@
             });
         }
 
-        if (timeDifference > 0 && gameSubmitted == false) {
-            document.getElementById('submitBtn').disabled = true;
-            } else {
-                document.getElementById('submitBtn').disabled = false;
-        }
-
         function renderButtons() {
             if (document.getElementById('submitBtn').disabled==true) {
                 submitBtn.classList.add('disabled-button');
@@ -486,6 +497,7 @@
         }
 
         init();
+        checkStartTime();
     </script>
 </body>
 </html>
